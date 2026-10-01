@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RL Visual Training Lab</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<header class="top">
+  <h1>RL <span>Visual</span> Training Lab</h1>
+  <nav class="tabs">
+    <button class="tab-btn active" data-view="train">Train</button>
+    <button class="tab-btn" data-view="math">Math Lab</button>
+    <button class="tab-btn" data-view="report">Report</button>
+  </nav>
+</header>
+
+<main>
+
+<!-- ============================= TRAIN VIEW ============================= -->
+<section id="view-train" class="view active">
+
+  <div class="card">
+    <h2>Choose an environment &amp; algorithm <small>pulled live from the full Gymnasium registry</small></h2>
+    <p class="hint">Every registered env is listed. Some families (Box2D, MuJoCo) need extra system packages —
+      those are flagged before you hit Start.</p>
+    <div class="controls">
+      <div class="field">
+        <label for="env-select">Environment</label>
+        <select id="env-select"></select>
+      </div>
+      <div class="field">
+        <label for="algo-select">Algorithm (SB3)</label>
+        <select id="algo-select"></select>
+      </div>
+      <div class="field">
+        <label for="timesteps-input">Total timesteps</label>
+        <input id="timesteps-input" type="number" value="30000" min="500" step="500" />
+      </div>
+      <div class="field">
+        <label for="lr-input">Learning rate</label>
+        <input id="lr-input" type="number" value="0.0003" step="0.0001" min="0.00001" />
+      </div>
+      <div class="field">
+        <label for="seed-input">Seed (optional)</label>
+        <input id="seed-input" type="number" placeholder="random" />
+      </div>
+      <button id="start-btn" class="primary">Start training</button>
+      <button id="stop-btn" class="secondary" disabled>Stop</button>
+      <span id="status-pill" class="pill"><span class="dot"></span> idle</span>
+    </div>
+    <div id="env-info" class="hint"></div>
+    <div id="env-warn"></div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2>Live environment <small>rendered directly from the training env</small></h2>
+      <div class="frame-wrap" id="frame-wrap">
+        <span class="placeholder">Start training to see the agent act</span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Training stack <small>live stats from this run</small></h2>
+      <div class="stat-row">
+        <div class="stat-tile"><div class="label">Step</div><div class="value" id="stat-step">0</div></div>
+        <div class="stat-tile"><div class="label">Episode reward</div><div class="value" id="stat-reward">–</div></div>
+        <div class="stat-tile"><div class="label">Episode length</div><div class="value" id="stat-length">–</div></div>
+        <div class="stat-tile"><div class="label">Parameters</div><div class="value" id="stat-params">–</div></div>
+      </div>
+      <div class="stat-row" style="margin-top:12px;">
+        <div class="stat-tile"><div class="label">Policy loss</div><div class="value" id="stat-ploss">–</div></div>
+        <div class="stat-tile"><div class="label">Value loss</div><div class="value" id="stat-vloss">–</div></div>
+        <div class="stat-tile"><div class="label">Entropy</div><div class="value" id="stat-entropy">–</div></div>
+        <div class="stat-tile"><div class="label">Approx KL</div><div class="value" id="stat-kl">–</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2>Episode reward <small>rolling reward per episode + moving average</small></h2>
+      <canvas id="chart-reward" class="chart"></canvas>
+    </div>
+    <div class="card">
+      <h2>Gradient norm <small>‖∇L‖ measured at every real optimizer.step()</small></h2>
+      <canvas id="chart-grad" class="chart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Loss diagnostics <small>straight from SB3's logger</small></h2>
+    <canvas id="chart-loss" class="chart"></canvas>
+  </div>
+
+  <div class="grid cols-2">
+    <div class="card">
+      <h2>Input layer weights <small id="w-name-1">mlp_extractor.policy_net.0</small></h2>
+      <canvas id="heatmap-input" class="heatmap"></canvas>
+    </div>
+    <div class="card">
+      <h2>Action head weights <small id="w-name-2">action_net</small></h2>
+      <canvas id="heatmap-action" class="heatmap"></canvas>
+    </div>
+  </div>
+
+</section>
+
+<!-- ============================= MATH LAB VIEW ============================= -->
+<section id="view-math" class="view">
+
+  <div class="card">
+    <h2>The RL loop</h2>
+    <p class="explain">Everything below is one repeated exchange between an <strong>agent</strong> and an
+      <strong>environment</strong>: the agent observes a state, takes an action, and gets back a reward and a
+      new state. Train this loop enough times and it converges toward a policy that maximizes total reward.</p>
+    <svg viewBox="0 0 640 160" class="loop-diagram">
+      <defs>
+        <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+          <path d="M0,0 L6,3 L0,6 Z" fill="#7c9bff" />
+        </marker>
+      </defs>
+      <rect class="box" x="30" y="55" width="140" height="50" rx="10" />
+      <text x="100" y="85" text-anchor="middle">Agent (π<tspan baseline-shift="sub">θ</tspan>)</text>
+      <rect class="box" x="470" y="55" width="140" height="50" rx="10" />
+      <text x="540" y="85" text-anchor="middle">Environment</text>
+      <path class="arrow" d="M170,68 C 300,20 340,20 470,68" />
+      <text class="label" x="320" y="25" text-anchor="middle">action aₜ</text>
+      <path class="arrow" d="M470,95 C 340,145 300,145 170,95" />
+      <text class="label" x="320" y="150" text-anchor="middle">reward rₜ, next state sₜ₊₁</text>
+    </svg>
+  </div>
+
+  <div class="card">
+    <h2>Return: what "maximize the result" actually means</h2>
+    <p class="explain">The GridWorld demo had one fixed target square — but the general RL objective doesn't
+      require a fixed goal at all. The agent maximizes the <strong>expected discounted return</strong>: the sum of
+      all future rewards, discounted so sooner rewards count more than later ones.</p>
+    <div class="eq">G<sub>t</sub> <span class="op">=</span> R<sub>t+1</sub> <span class="op">+</span> γR<sub>t+2</sub> <span class="op">+</span> γ²R<sub>t+3</sub> <span class="op">+</span> ... <span class="op">=</span> <span class="accent">Σ<sub>k=0</sub><sup>∞</sup></span> γ<sup>k</sup> R<sub>t+k+1</sub></div>
+    <p class="explain">γ (gamma, 0–1) is the <strong>discount factor</strong>. "Reach the goal" is just a special
+      case where reward is 0 everywhere except one state — the same equation covers balancing a pole, landing a
+      rocket, or playing chess indefinitely.</p>
+  </div>
+
+  <div class="card">
+    <h2>Bellman expectation equations <small>value of following a fixed policy π</small></h2>
+    <p class="explain"><strong>State-value function</strong> — how good is it to be in state s if I keep following π?</p>
+    <div class="eq">V<sup>π</sup>(s) <span class="op">=</span> 𝔼<sub>π</sub>[ R<sub>t+1</sub> <span class="op">+</span> γV<sup>π</sup>(S<sub>t+1</sub>) <span class="op">|</span> S<sub>t</sub><span class="op">=</span>s ]</div>
+    <p class="explain"><strong>Action-value function</strong> — how good is it to take action a in state s, then follow π?</p>
+    <div class="eq">Q<sup>π</sup>(s,a) <span class="op">=</span> 𝔼<sub>π</sub>[ R<sub>t+1</sub> <span class="op">+</span> γQ<sup>π</sup>(S<sub>t+1</sub>,A<sub>t+1</sub>) <span class="op">|</span> S<sub>t</sub><span class="op">=</span>s, A<sub>t</sub><span class="op">=</span>a ]</div>
+    <p class="explain">Both are recursive: the value of "now" is defined in terms of the value of "one step later."
+      That recursion is exactly what let the GridWorld Q-table bootstrap itself from zero.</p>
+  </div>
+
+  <div class="card">
+    <h2>Bellman optimality equations <small>value of the best possible policy</small></h2>
+    <p class="explain">Swap "follow π" for "always take the best available action," and you get the equations that
+      define the <strong>optimal</strong> value functions V* and Q* — not tied to any one policy:</p>
+    <div class="eq">V*(s) <span class="op">=</span> max<sub>a</sub> 𝔼[ R<sub>t+1</sub> <span class="op">+</span> γV*(S<sub>t+1</sub>) <span class="op">|</span> S<sub>t</sub><span class="op">=</span>s, A<sub>t</sub><span class="op">=</span>a ]</div>
+    <div class="eq">Q*(s,a) <span class="op">=</span> 𝔼[ R<sub>t+1</sub> <span class="op">+</span> γ max<sub>a'</sub> Q*(S<sub>t+1</sub>,a') <span class="op">|</span> S<sub>t</sub><span class="op">=</span>s, A<sub>t</sub><span class="op">=</span>a ]</div>
+    <p class="explain">Q-learning's update rule (from the GridWorld video) is <em>literally this equation</em>,
+      applied one sampled transition at a time instead of over the true expectation.</p>
+  </div>
+
+  <div class="card">
+    <h2>From a table to a network: why this needs gradient descent</h2>
+    <p class="explain">A table only works while (state, action) pairs are countable — 25 grid squares × 4 moves.
+      CartPole's state is 4 continuous numbers; most real environments have effectively infinite states. So instead
+      of a table, we use a <strong>neural network</strong> Q<sub>θ</sub> (or a policy network π<sub>θ</sub>) with
+      weights θ, and train θ so the network satisfies the Bellman equation approximately.</p>
+    <div class="eq">L(θ) <span class="op">=</span> 𝔼 [ (<span class="accent">y</span> <span class="op">−</span> Q<sub>θ</sub>(s,a))² ] <span class="op">,</span> &nbsp; <span class="accent">y</span> <span class="op">=</span> r <span class="op">+</span> γ max<sub>a'</sub> Q<sub>θ</sub>(s',a')</div>
+    <p class="explain">This is the same TD-error idea as the GridWorld update — <code>y</code> is the "target" the
+      network is nudged toward. What's different is <em>how</em> θ gets nudged: not a single table cell, but every
+      weight in the network, via gradient descent.</p>
+  </div>
+
+  <div class="card">
+    <h2>Policy gradient theorem <small>what PPO/A2C actually optimize</small></h2>
+    <p class="explain">Value-based methods (DQN) learn Q and act greedily. Policy-based methods instead directly
+      adjust a network that <em>outputs actions</em>, by pushing up the probability of actions that led to higher
+      return than expected:</p>
+    <div class="eq">∇<sub>θ</sub> J(θ) <span class="op">=</span> 𝔼<sub>π<sub>θ</sub></sub> [ ∇<sub>θ</sub> log π<sub>θ</sub>(a|s) <span class="op">·</span> A<sup>π</sup>(s,a) ]</div>
+    <p class="explain">A(s,a) is the <strong>advantage</strong>: how much better action a was than average at state
+      s (≈ Q(s,a) − V(s)). PPO adds a clip so this update never moves the policy too far in one step:</p>
+    <div class="eq">L<sup>CLIP</sup>(θ) <span class="op">=</span> 𝔼 [ min( r<sub>t</sub>(θ) A<sub>t</sub>, &nbsp; clip(r<sub>t</sub>(θ), 1<span class="op">−</span>ε, 1<span class="op">+</span>ε) A<sub>t</sub> ) ]</div>
+    <p class="explain">That's exactly the <code>train/policy_gradient_loss</code>, <code>train/clip_fraction</code>,
+      and <code>train/approx_kl</code> numbers streaming in on the Train tab while PPO runs.</p>
+  </div>
+
+  <div class="card">
+    <h2>Gradient descent playground <small>real descent, not an animation of it</small></h2>
+    <p class="explain">A real policy network has thousands of weights — you can't draw its loss surface. But the
+      <em>mechanism</em> is identical in 1 or 2 dimensions, so here it is, small enough to see completely:
+      <code>θ ← θ − α∇L(θ)</code>.</p>
+
+    <h3 style="margin-top:18px; font-size:14px;">1. Rolling downhill: minimizing f(x) = (x − 3)²</h3>
+    <div class="controls">
+      <div class="field">
+        <label for="gd1d-lr">Learning rate α</label>
+        <input id="gd1d-lr" type="range" min="0.01" max="1.05" step="0.01" value="0.15" />
+      </div>
+      <div class="field">
+        <label for="gd1d-lr-val">value</label>
+        <input id="gd1d-lr-val" type="number" value="0.15" step="0.01" style="width:80px" />
+      </div>
+      <button id="gd1d-run" class="primary">Run gradient descent</button>
+    </div>
+    <canvas id="chart-gd1d" class="chart" style="height:260px;"></canvas>
+    <p class="explain" id="gd1d-readout"></p>
+
+    <h3 style="margin-top:26px; font-size:14px;">2. Fitting a line: gradient descent while "giving it our data"</h3>
+    <p class="explain">This is a tiny linear regression: y = wx + b. We generate noisy synthetic data, start w and
+      b far from correct, and watch gradient descent walk downhill on the loss surface until the line fits.</p>
+    <div class="controls">
+      <div class="field">
+        <label for="gd2d-lr">Learning rate α</label>
+        <input id="gd2d-lr" type="range" min="0.005" max="0.12" step="0.005" value="0.03" />
+      </div>
+      <div class="field">
+        <label for="gd2d-lr-val">value</label>
+        <input id="gd2d-lr-val" type="number" value="0.03" step="0.005" style="width:80px" />
+      </div>
+      <div class="field">
+        <label for="gd2d-noise">Data noise</label>
+        <input id="gd2d-noise" type="range" min="0" max="3" step="0.1" value="1.0" />
+      </div>
+      <button id="gd2d-regen" class="secondary">New random data</button>
+      <button id="gd2d-run" class="primary">Run gradient descent</button>
+    </div>
+    <div class="grid cols-2">
+      <div>
+        <p class="explain"><strong>The data + the line being fit</strong></p>
+        <canvas id="chart-gd2d-fit" class="chart"></canvas>
+      </div>
+      <div>
+        <p class="explain"><strong>Loss surface L(w,b) + the descent path</strong></p>
+        <canvas id="chart-gd2d-surface" class="chart"></canvas>
+      </div>
+    </div>
+    <p class="explain" id="gd2d-readout"></p>
+  </div>
+
+</section>
+
+<!-- ============================= REPORT VIEW ============================= -->
+<section id="view-report" class="view">
+
+  <div class="card" id="report-empty">
+    <h2>No trained model yet</h2>
+    <p class="explain">Train something on the <strong>Train</strong> tab first — this page inspects the actual
+      model that run produced: its real weights, a live forward pass, and how it behaves when tested.</p>
+  </div>
+
+  <div id="report-content" style="display:none;">
+
+    <div class="card">
+      <h2>What you're looking at <small id="report-summary-line"></small></h2>
+      <div id="report-caveat"></div>
+    </div>
+
+    <div class="card">
+      <h2>Network flow <small>a real forward pass, one layer at a time</small></h2>
+      <p class="explain">Each box below is <code>z = W·x + b</code> then an activation function, computed live from
+        one real observation the trained model just saw. Compare the "Input layer weights" heatmap on the Train tab —
+        that's literally the W matrix of the first box here.</p>
+      <div class="controls">
+        <button id="report-retrace" class="secondary">Trace a new observation</button>
+      </div>
+      <div id="flow-diagram"></div>
+    </div>
+
+    <div class="card">
+      <h2>How reward actually drives training</h2>
+      <p class="explain">The reward never touches the network weights directly. What actually happens, every
+        update:</p>
+      <ol class="explain" style="padding-left: 18px;">
+        <li>The agent collects a batch of <code>(state, action, reward, next_state)</code> transitions by acting in the environment.</li>
+        <li>Rewards are combined across a trajectory into a <strong>return</strong> or <strong>advantage</strong> —
+          "was this action better or worse than expected, accounting for everything that happened afterward?"</li>
+        <li>That advantage becomes part of a <strong>loss function</strong> (see the Algorithm card below for the
+          exact one this run used).</li>
+        <li><strong>Gradient descent</strong> then adjusts every weight in the network to reduce that loss —
+          nudging the network toward actions that led to higher-than-expected reward, and away from ones that didn't.</li>
+        <li>Repeat with the (now slightly better) policy. The next batch of rewards reflects the updated behavior —
+          that's the feedback loop that gets you from a random policy to a good one.</li>
+      </ol>
+      <p class="explain">In other words: reward → advantage/target → loss → gradient → weight update → different
+        behavior → different rewards next time. See the <strong>Math Lab</strong> tab for the exact equations.</p>
+    </div>
+
+    <div class="card">
+      <h2>Reward function &amp; termination <small id="report-env-name"></small></h2>
+      <div id="report-env-doc"></div>
+    </div>
+
+    <div class="card">
+      <h2>Algorithm <small id="report-algo-name"></small></h2>
+      <div id="report-algo-explain"></div>
+      <p class="explain" style="margin-top:14px;"><strong>Hyperparameters used this run:</strong></p>
+      <div id="report-hyperparams"></div>
+    </div>
+
+    <div class="card">
+      <h2>Test the trained agent <small>deterministic rollouts — no exploration, just what it learned</small></h2>
+      <p class="explain">This runs the current model greedily for a number of full episodes and grades each one
+        success/fail using the reward-function rules above.</p>
+      <div class="controls">
+        <div class="field">
+          <label for="test-n-episodes">Episodes</label>
+          <input id="test-n-episodes" type="number" value="10" min="1" max="50" />
+        </div>
+        <button id="test-run-btn" class="primary">Run test episodes</button>
+        <span id="test-status" class="pill"><span class="dot"></span> idle</span>
+      </div>
+      <div id="test-summary"></div>
+      <div id="test-table"></div>
+    </div>
+
+  </div>
+
+</section>
+
+</main>
+
+<footer class="credits">RL Visual Training Lab — local dashboard, runs entirely on this machine.</footer>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
