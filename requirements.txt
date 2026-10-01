@@ -1,0 +1,11 @@
+gymnasium>=1.0
+stable-baselines3>=2.0
+torch>=2.0
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pillow>=10.0
+numpy>=1.26
+pygame>=2.5          # rgb_array rendering for classic_control envs
+# optional extras, install if you pick these env families from the dashboard:
+# box2d-py, swig     -> for LunarLander / BipedalWalker / CarRacing
+# mujoco             -> for the MuJoCo continuous-control envs
